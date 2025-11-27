@@ -1,0 +1,36 @@
+name: Convert .py to .ipynb with Jupytext
+
+on:
+  push:
+    paths:
+      - '**/*.py'
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Jupytext
+        run: pip install jupytext
+
+      - name: Convert .py files to .ipynb
+        run: |
+          for file in $(find . -name "*.py"); do
+            ipynb="${file%.py}.ipynb"
+            jupytext --to ipynb "$file"
+          done
+
+      - name: Commit converted notebooks
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "*.ipynb"
+          git commit -m "Auto-convert .py to .ipynb" || echo "No changes to commit"
+
+      - name: Push changes
+        uses: ad-m/github-push-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
