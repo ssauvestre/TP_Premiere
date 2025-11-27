@@ -1,4 +1,4 @@
-name: Convert .py to single-cell .ipynb with Jupytext
+name: Convert .py to one-cell .ipynb with Jupytext
 
 on:
   push:
@@ -13,27 +13,53 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Jupytext
-        run: pip install jupytext
+      - name: Install Python dependencies
+        run: |
+          pip install jupytext nbformat
 
-      - name: Convert .py files to one-cell .ipynb
+      - name: Convert .py files to .ipynb (multi-cell)
         run: |
           for file in $(find . -name "*.py"); do
-            ipynb="${file%.py}.ipynb"
-            jupytext \
-              --to ipynb \
-              --opt split_at_blank_lines=false \
-              --opt split_at_heading=false \
-              --opt cell_markers="[]" \
-              "$file"
+            jupytext --to ipynb "$file"
           done
 
-      - name: Commit converted notebooks
+      - name: Merge all cells into a single cell
+        run: |
+          python3 << 'EOF'
+          import nbformat
+          import os
+
+          # Parcourir tous les .ipynb
+          for root, dirs, files in os.walk("."):
+              for name in files:
+                  if name.endswith(".ipynb"):
+                      path = os.path.join(root, name)
+                      nb = nbformat.read(path, as_version=4)
+
+                      # Fusionner toutes les cellules code en un seul bloc texte
+                      merged_source = ""
+                      for cell in nb.cells:
+                          if cell.cell_type == "code":
+                              merged_source += cell.source + "\n\n"
+                          elif cell.cell_type == "markdown":
+                              # Option : mettre les markdown en commentaires
+                              merged_source += "# " + cell.source.replace("\n", "\n# ") + "\n\n"
+
+                      # Créer une seule cellule code
+                      nb.cells = [
+                          nbformat.v4.new_code_cell(merged_source)
+                      ]
+
+                      nbformat.write(nb, path)
+                      print(f"Merged into single cell: {path}")
+          EOF
+
+      - name: Commit merged notebooks
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add "*.ipynb"
-          git commit -m "Auto-convert .py to one-cell .ipynb" || echo "No changes to commit"
+          git commit -m "Auto-convert .py to ONE-CELL .ipynb" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@v1
