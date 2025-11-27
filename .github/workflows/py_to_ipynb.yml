@@ -1,4 +1,4 @@
-name: Convert .py to .ipynb with Jupytext (single cell)
+name: Convert .py to single-cell .ipynb with Jupytext
 
 on:
   push:
@@ -16,27 +16,24 @@ jobs:
       - name: Install Jupytext
         run: pip install jupytext
 
-      - name: Add single-cell marker to .py files
+      - name: Convert .py files to one-cell .ipynb
         run: |
           for file in $(find . -name "*.py"); do
-            # Vérifie si le fichier ne contient PAS déjà "# %%"
-            if ! grep -q "^# %%" "$file"; then
-              echo "# %%\n$(cat "$file")" > "$file"
-            fi
-          done
-
-      - name: Convert .py files to .ipynb
-        run: |
-          for file in $(find . -name "*.py"); do
-            jupytext --to ipynb "$file"
+            ipynb="${file%.py}.ipynb"
+            jupytext \
+              --to ipynb \
+              --opt split_at_blank_lines=false \
+              --opt split_at_heading=false \
+              --opt cell_markers="[]" \
+              "$file"
           done
 
       - name: Commit converted notebooks
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add "*.py" "*.ipynb"
-          git commit -m "Auto-convert .py to .ipynb (single cell)" || echo "No changes to commit"
+          git add "*.ipynb"
+          git commit -m "Auto-convert .py to one-cell .ipynb" || echo "No changes to commit"
 
       - name: Push changes
         uses: ad-m/github-push-action@v1
