@@ -23,36 +23,52 @@ jobs:
             jupytext --to ipynb "$file"
           done
 
-      - name: Merge all cells into a single cell
+           - name: Merge all cells into a single cell
         run: |
           python3 << 'EOF'
           import nbformat
           import os
 
-          # Parcourir tous les .ipynb
+          # Caractères parasites possibles en début de fichier
+          BAD_PREFIXES = ["\ufeff", "\uFEFF", "\u200b", "\u202a", "\u202b", "·"]
+
+          def clean_start(text):
+              """Supprime les caractères invisibles ou parasites en début de fichier."""
+              changed = True
+              while changed:
+                  changed = False
+                  for bad in BAD_PREFIXES:
+                      if text.startswith(bad):
+                          text = text[len(bad):]
+                          changed = True
+              return text
+
           for root, dirs, files in os.walk("."):
               for name in files:
                   if name.endswith(".ipynb"):
                       path = os.path.join(root, name)
                       nb = nbformat.read(path, as_version=4)
 
-                      # Fusionner toutes les cellules code en un seul bloc texte
                       merged_source = ""
+
                       for cell in nb.cells:
                           if cell.cell_type == "code":
                               merged_source += cell.source + "\n\n"
                           elif cell.cell_type == "markdown":
-                              # Option : mettre les markdown en commentaires
                               merged_source += "# " + cell.source.replace("\n", "\n# ") + "\n\n"
 
-                      # Créer une seule cellule code
+                      # Nettoyage du début de la cellule fusionnée
+                      merged_source = clean_start(merged_source)
+
                       nb.cells = [
                           nbformat.v4.new_code_cell(merged_source)
                       ]
 
                       nbformat.write(nb, path)
-                      print(f"Merged into single cell: {path}")
+                      print(f"Merged and cleaned: {path}")
+
           EOF
+
 
       - name: Commit merged notebooks
         run: |
