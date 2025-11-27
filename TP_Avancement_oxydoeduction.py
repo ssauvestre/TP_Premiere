@@ -1,4 +1,4 @@
-print("")
+# %%\nprint("")
 print("*********************************")
 print("*       Étude quantitative      *")
 print("* d'une transformation chimique *")

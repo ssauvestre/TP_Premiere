@@ -1,4 +1,4 @@
-﻿from pylab import *
+# %%\n﻿from pylab import *
 
 # Données modifiables
 A = A COMPLETER	# amplitude suivant z, en dm (entre 0 et Amax)
