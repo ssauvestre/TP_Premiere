@@ -23,17 +23,17 @@ jobs:
             jupytext --to ipynb "$file"
           done
 
-           - name: Merge all cells into a single cell
+      - name: Merge all cells into a single cleaned cell
         run: |
           python3 << 'EOF'
           import nbformat
           import os
 
-          # Caractères parasites possibles en début de fichier
+          # Caractères parasites en début de fichier possibles (BOM, ZWSP, point médian…)
           BAD_PREFIXES = ["\ufeff", "\uFEFF", "\u200b", "\u202a", "\u202b", "·"]
 
           def clean_start(text):
-              """Supprime les caractères invisibles ou parasites en début de fichier."""
+              """Supprime les caractères invisibles parasites en début de texte."""
               changed = True
               while changed:
                   changed = False
@@ -43,6 +43,7 @@ jobs:
                           changed = True
               return text
 
+          # Parcours de tous les notebooks générés
           for root, dirs, files in os.walk("."):
               for name in files:
                   if name.endswith(".ipynb"):
@@ -51,24 +52,27 @@ jobs:
 
                       merged_source = ""
 
+                      # Fusionner toutes les cellules (code + markdown commenté)
                       for cell in nb.cells:
                           if cell.cell_type == "code":
                               merged_source += cell.source + "\n\n"
                           elif cell.cell_type == "markdown":
+                              # convertir markdown en commentaires
                               merged_source += "# " + cell.source.replace("\n", "\n# ") + "\n\n"
 
-                      # Nettoyage du début de la cellule fusionnée
+                      # Supprimer les caractères invisibles parasites au début
                       merged_source = clean_start(merged_source)
 
+                      # Remplacer toutes les cellules par une seule
                       nb.cells = [
                           nbformat.v4.new_code_cell(merged_source)
                       ]
 
+                      # Sauvegarder
                       nbformat.write(nb, path)
                       print(f"Merged and cleaned: {path}")
 
           EOF
-
 
       - name: Commit merged notebooks
         run: |
