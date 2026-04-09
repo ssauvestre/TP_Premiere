@@ -1,17 +1,14 @@
 name: Convert .py to one-cell .ipynb with Jupytext
-
 on:
   push:
     paths:
       - '**/*.py'
-
 jobs:
   convert:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Python dependencies
         run: |
@@ -19,9 +16,36 @@ jobs:
 
       - name: Convert .py files to .ipynb (multi-cell)
         run: |
-          for file in $(find . -name "*.py"); do
-            jupytext --to ipynb "$file"
-          done
+          python3 << 'EOF'
+          import subprocess
+          import os
+          import sys
+
+          failed = []
+          success = []
+
+          for root, dirs, files in os.walk("."):
+              # Ignorer les dossiers cachés (.git, etc.)
+              dirs[:] = [d for d in dirs if not d.startswith(".")]
+              for name in files:
+                  if name.endswith(".py"):
+                      path = os.path.join(root, name)
+                      result = subprocess.run(
+                          ["jupytext", "--to", "ipynb", path],
+                          capture_output=True, text=True
+                      )
+                      if result.returncode == 0:
+                          success.append(path)
+                          print(f"✅ Converti : {path}")
+                      else:
+                          failed.append(path)
+                          print(f"⚠️  Ignoré (fichier incomplet ou invalide) : {path}")
+                          print(result.stderr[:300])
+
+          print(f"\n--- Résumé : {len(success)} converti(s), {len(failed)} ignoré(s) ---")
+          for f in failed:
+              print(f"  ⚠️  {f}")
+          EOF
 
       - name: Merge all cells into a single cleaned cell
         run: |
@@ -29,11 +53,9 @@ jobs:
           import nbformat
           import os
 
-          # Caractères parasites en début de fichier possibles (BOM, ZWSP, point médian…)
           BAD_PREFIXES = ["\ufeff", "\uFEFF", "\u200b", "\u202a", "\u202b", "·"]
 
           def clean_start(text):
-              """Supprime les caractères invisibles parasites en début de texte."""
               changed = True
               while changed:
                   changed = False
@@ -43,35 +65,25 @@ jobs:
                           changed = True
               return text
 
-          # Parcours de tous les notebooks générés
           for root, dirs, files in os.walk("."):
+              dirs[:] = [d for d in dirs if not d.startswith(".")]
               for name in files:
                   if name.endswith(".ipynb"):
                       path = os.path.join(root, name)
-                      nb = nbformat.read(path, as_version=4)
-
-                      merged_source = ""
-
-                      # Fusionner toutes les cellules (code + markdown commenté)
-                      for cell in nb.cells:
-                          if cell.cell_type == "code":
-                              merged_source += cell.source + "\n\n"
-                          elif cell.cell_type == "markdown":
-                              # convertir markdown en commentaires
-                              merged_source += "# " + cell.source.replace("\n", "\n# ") + "\n\n"
-
-                      # Supprimer les caractères invisibles parasites au début
-                      merged_source = clean_start(merged_source)
-
-                      # Remplacer toutes les cellules par une seule
-                      nb.cells = [
-                          nbformat.v4.new_code_cell(merged_source)
-                      ]
-
-                      # Sauvegarder
-                      nbformat.write(nb, path)
-                      print(f"Merged and cleaned: {path}")
-
+                      try:
+                          nb = nbformat.read(path, as_version=4)
+                          merged_source = ""
+                          for cell in nb.cells:
+                              if cell.cell_type == "code":
+                                  merged_source += cell.source + "\n\n"
+                              elif cell.cell_type == "markdown":
+                                  merged_source += "# " + cell.source.replace("\n", "\n# ") + "\n\n"
+                          merged_source = clean_start(merged_source)
+                          nb.cells = [nbformat.v4.new_code_cell(merged_source)]
+                          nbformat.write(nb, path)
+                          print(f"✅ Fusionné : {path}")
+                      except Exception as e:
+                          print(f"⚠️  Ignoré (erreur fusion) : {path} — {e}")
           EOF
 
       - name: Commit merged notebooks
